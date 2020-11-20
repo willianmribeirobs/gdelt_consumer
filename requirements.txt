@@ -1,0 +1,8 @@
+# Function dependencies, for example:
+# package>=version
+grpcio>=1.33.1
+grpcio-gcp>=0.2.2
+requests
+lxml
+datetime
+google.cloud.storage
