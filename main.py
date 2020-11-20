@@ -2,24 +2,26 @@ import requests as request
 from lxml import html
 from datetime import datetime, timedelta
 import google.cloud.storage as storage
-import zipfile, os
+import zipfile, os, sys
 try:
     from StringIO import StringIO ## for Python 2
 except ImportError:
     from io import BytesIO ## for Python 3
 
 
-def ingest_data(request):
+def ingest_data(args):
 
     print("Building Paths!")
-    downlaod_event_base_path = get_paths("events")
+    source = "events"
+    downlaod_event_base_path = get_paths(source)
 
     print("Calculating Dates!")
-    d1_date = get_retro_date(1, "%Y%m%d")
+    #d1_date = get_retro_date(1, "%Y%m%d")
+    d1_date = args
 
     # get list of links to download
     print("Getting list of links!")
-    file_list = get_list_of_links(downlaod_event_base_path, d1_date)
+    file_list = get_list_of_links(downlaod_event_base_path, d1_date, 'month')
 
     for file_name in file_list:
         print("Downloading files: {}!".format(file_name))
@@ -27,9 +29,9 @@ def ingest_data(request):
         zip_file = download_results(download_link)
 
         print("Extracting files!")
-        zip = extract_zip_file(zip_file, "raw/")
+        extract_zip_file(zip_file, "raw/")
 
-        destination_path = "datalake/raw/{}".format(file_name.replace(".zip", ""))
+        destination_path = "datalake/raw/{}/{}".format(source, file_name.replace(".zip", ""))
         raw_file_path = "raw/{}".format(file_name.replace(".zip", ""))
         print("Uploading to GCS: {}!".format(raw_file_path))
         upload_blob("poc-bayer-gdelt", raw_file_path, destination_path)
@@ -51,13 +53,17 @@ def get_retro_date(ret, fmt):
     today = datetime.now()
     return (today - timedelta(days=ret)).strftime(fmt)
 
-def get_list_of_links(url, date=None):
+def get_list_of_links(url, date=None, type='day'):
     page = request.get(url)
     doc = html.fromstring(page.content)
     link_list = doc.xpath("//*/ul/li/a/@href")
-    if date:
+    if not date:
+        date = datetime.now().strftime("%Y%m%d")
+    if type == 'day':
+        file_list = [x for x in link_list if str.isdigit(x[0:4]) and x[0:8] == date]
+    elif type == 'month':
         file_list = [x for x in link_list if str.isdigit(x[0:4]) and x[0:6] == date[0:6]]
-    else:
+    elif type == 'year':
         file_list = [x for x in link_list if str.isdigit(x[0:4])]
     return file_list
 
@@ -83,4 +89,5 @@ def extract_zip_file(zip_file, path):
 ##################################
 if __name__ == "__main__":
     print("Executando Function!")
-    ingest_data(request)
+    args = sys.argv[1]
+    ingest_data(args)
